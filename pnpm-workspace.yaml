@@ -1,0 +1,4 @@
+# pnpm 11 stores project settings here. With no `packages` field, only the root
+# package is included; this remains a single-package project.
+allowBuilds:
+  esbuild: true

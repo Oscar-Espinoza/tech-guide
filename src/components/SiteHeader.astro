@@ -1,0 +1,53 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+
+const { currentPath = '/' } = Astro.props;
+const links = [
+  { href: '/concepts/', label: 'Concepts' },
+  { href: '/search/', label: 'Search' },
+  { href: '/about/', label: 'About' },
+];
+---
+
+<header class="site-header">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="header-inner">
+    <a class="wordmark" href="/" aria-label="Systems Field Guide home">
+      <span class="wordmark-mark" aria-hidden="true">SFG</span>
+      <span>Systems Field Guide</span>
+    </a>
+    <button
+      class="nav-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="site-navigation"
+    >
+      <span aria-hidden="true">Menu</span>
+      <span class="sr-only">Toggle navigation</span>
+    </button>
+    <nav id="site-navigation" class="site-nav" aria-label="Primary">
+      {
+        links.map(({ href, label }) => (
+          <a
+            href={href}
+            aria-current={currentPath.startsWith(href) ? 'page' : undefined}
+          >
+            {label}
+          </a>
+        ))
+      }
+      <a class="language-link" href="/es/" lang="es" hreflang="es">ES</a>
+      <ThemeToggle />
+    </nav>
+  </div>
+</header>
+
+<script>
+  const toggle = document.querySelector<HTMLButtonElement>('.nav-toggle');
+  const nav = document.querySelector<HTMLElement>('#site-navigation');
+  toggle?.addEventListener('click', () => {
+    const expanded = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', String(!expanded));
+    nav?.classList.toggle('is-open', !expanded);
+  });
+</script>

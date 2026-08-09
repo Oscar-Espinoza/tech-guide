@@ -1,0 +1,122 @@
+---
+import { getCollection } from 'astro:content';
+import ConceptCard from '../../components/ConceptCard.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { categories, difficulties, statuses } from '../../lib/content-schema';
+import { visibleConcepts } from '../../lib/content';
+
+const concepts = visibleConcepts(await getCollection('concepts')).filter(
+  (concept) => concept.data.locale === 'en',
+);
+const tags = [
+  ...new Set(concepts.flatMap((concept) => concept.data.tags)),
+].sort();
+---
+
+<BaseLayout
+  title="Concept library"
+  description="Browse systems concepts by category, tag, difficulty, and publication status."
+>
+  <header class="page-header">
+    <div class="page-shell">
+      <p class="hero-kicker">The collection</p><h1>Concept library</h1><p>
+        Comparable explanations for decisions that depend on context. Filter by
+        the constraint you are working through.
+      </p>
+    </div>
+  </header>
+  <section class="section">
+    <div class="section-inner">
+      <form class="filters" data-concept-filters>
+        <div class="field">
+          <label for="category">Category</label><select
+            id="category"
+            name="category"
+            ><option value="">All categories</option>{
+              categories.map((category) => (
+                <option value={category}>{category}</option>
+              ))
+            }</select
+          >
+        </div>
+        <div class="field">
+          <label for="tag">Tag</label><select id="tag" name="tag"
+            ><option value="">All tags</option>{
+              tags.map((tag) => <option value={tag}>{tag}</option>)
+            }</select
+          >
+        </div>
+        <div class="field">
+          <label for="difficulty">Difficulty</label><select
+            id="difficulty"
+            name="difficulty"
+            ><option value="">All levels</option>{
+              difficulties.map((difficulty) => (
+                <option value={difficulty}>{difficulty}</option>
+              ))
+            }</select
+          >
+        </div>
+        <div class="field">
+          <label for="status">Status</label><select id="status" name="status"
+            ><option value="">All statuses</option>{
+              statuses
+                .filter((status) => status !== 'draft')
+                .map((status) => <option value={status}>{status}</option>)
+            }</select
+          >
+        </div>
+      </form>
+      <p class="results-count" role="status" data-results-count>
+        {concepts.length}
+        {concepts.length === 1 ? 'concept' : 'concepts'}
+      </p>
+      <div class="concept-grid" data-concept-grid>
+        {concepts.map((concept) => <ConceptCard concept={concept} />)}
+      </div>
+      <div class="empty-state" data-empty hidden>
+        <h2>No concepts match those filters</h2><p>
+          Try clearing one or more filters. The collection is still growing.
+        </p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>(
+    '[data-concept-filters]',
+  );
+  const cards = [...document.querySelectorAll<HTMLElement>('.concept-card')];
+  const count = document.querySelector<HTMLElement>('[data-results-count]');
+  const empty = document.querySelector<HTMLElement>('[data-empty]');
+  const params = new URLSearchParams(location.search);
+
+  for (const select of form?.querySelectorAll<HTMLSelectElement>('select') ??
+    [])
+    select.value = params.get(select.name) ?? '';
+
+  const apply = () => {
+    const data = new FormData(form ?? undefined);
+    let visible = 0;
+    cards.forEach((card) => {
+      const matches =
+        ['category', 'difficulty', 'status'].every(
+          (key) => !data.get(key) || card.dataset[key] === data.get(key),
+        ) &&
+        (!data.get('tag') ||
+          card.dataset.tags?.split(',').includes(String(data.get('tag'))));
+      card.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    if (count)
+      count.textContent = `${visible} ${visible === 1 ? 'concept' : 'concepts'}`;
+    if (empty) empty.hidden = visible !== 0;
+    const next = new URLSearchParams();
+    for (const [key, value] of data.entries())
+      if (value) next.set(key, String(value));
+    history.replaceState({}, '', next.size ? `?${next}` : location.pathname);
+  };
+  form?.addEventListener('change', apply);
+  apply();
+</script>

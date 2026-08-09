@@ -1,0 +1,50 @@
+<button
+  class="theme-toggle"
+  type="button"
+  data-theme-toggle
+  aria-label="Switch color theme"
+  aria-live="polite"
+>
+  <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20">
+    <path
+      d="M12 3v2m0 14v2M3 12h2m14 0h2M5.64 5.64l1.42 1.42m9.88 9.88 1.42 1.42m0-12.72-1.42 1.42M7.06 16.94l-1.42 1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-width="1.75"></path>
+  </svg>
+  <span data-theme-label>Theme</span>
+</button>
+
+<script>
+  import { oppositeTheme, resolveTheme, type Theme } from '../lib/theme';
+
+  const button = document.querySelector<HTMLButtonElement>(
+    '[data-theme-toggle]',
+  );
+  const label = button?.querySelector<HTMLElement>('[data-theme-label]');
+
+  const applyTheme = (theme: Theme) => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    if (label) label.textContent = theme === 'dark' ? 'Light' : 'Dark';
+    button?.setAttribute(
+      'aria-label',
+      `Switch to ${oppositeTheme(theme)} theme`,
+    );
+  };
+
+  applyTheme(
+    resolveTheme(
+      document.documentElement.dataset.theme,
+      matchMedia('(prefers-color-scheme: dark)').matches,
+    ),
+  );
+
+  button?.addEventListener('click', () => {
+    const current = resolveTheme(document.documentElement.dataset.theme, false);
+    const next = oppositeTheme(current);
+    localStorage.setItem('sfg-theme', next);
+    applyTheme(next);
+  });
+</script>

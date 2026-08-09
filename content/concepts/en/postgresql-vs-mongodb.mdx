@@ -1,0 +1,423 @@
+---
+title: PostgreSQL vs MongoDB
+description:
+  A constraint-led comparison of relational and document databases across data
+  shape, transactions, queries, scaling, and operations.
+category: databases
+tags:
+  - postgresql
+  - mongodb
+  - data-modeling
+  - transactions
+  - scaling
+locale: en
+translationKey: postgresql-vs-mongodb
+status: published
+difficulty: intermediate
+featured: true
+publishedAt: 2026-08-09
+updatedAt: 2026-08-09
+relatedConcepts: []
+---
+
+import ComparisonDiagram from '../../../src/components/ComparisonDiagram.astro';
+
+## Overview
+
+PostgreSQL and MongoDB can both support serious production systems. The useful
+question is not “Which database is better?” It is “Which model makes the
+important rules and access patterns of this system easiest to express, verify,
+and operate?”
+
+PostgreSQL is a relational database. It represents facts in typed tables and
+connects them with keys, constraints, and joins. MongoDB is a document database.
+It represents an aggregate as a BSON document that may contain nested objects
+and arrays. Both provide indexes, transactions, replication, rich queries, and
+ways to distribute data. They put the easiest path—and the sharp edges—in
+different places.
+
+> Start from the invariants and query patterns you can name today. “Our data is
+> JSON” and “we may scale someday” are not sufficient requirements.
+
+| Decision signal | PostgreSQL tends to fit                                          | MongoDB tends to fit                                                  |
+| --------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Relationships   | Many-to-many relationships and cross-entity rules are central    | Most data is read and changed as self-contained aggregates            |
+| Query shape     | The product needs flexible joins, reporting, and ad hoc analysis | A bounded set of queries maps cleanly to document shape               |
+| Consistency     | Constraints must hold across many rows and tables                | Atomicity within one document covers most invariants                  |
+| Schema change   | Coordinated migrations are acceptable and valuable               | Several document shapes must coexist during gradual evolution         |
+| Operations      | The team has strong SQL and relational operations experience     | The team understands document sizing, shard keys, and denormalization |
+
+## Mental model
+
+Think of PostgreSQL as a system of facts with rules between them. A customer,
+order, line item, and product may live in separate tables. The database can
+prevent an order from pointing to a missing customer, keep money values within
+valid ranges, and combine the facts differently for checkout, fulfillment, and
+reporting.
+
+Think of MongoDB as a collection of records shaped around application
+aggregates. An order document may contain its shipping address and line items
+because those values are normally loaded and updated with the order. This can
+make the common request direct, but the application must decide what to embed,
+what to reference, and how duplicated facts are kept meaningful.
+
+<ComparisonDiagram
+  title="Two data-modeling centers of gravity"
+  description="PostgreSQL normalizes connected facts and recombines them at query time. MongoDB often stores an aggregate together and optimizes around document access."
+  left={{
+    title: 'PostgreSQL',
+    subtitle: 'facts + relationships',
+    points: [
+      'Typed rows',
+      'Keys and constraints',
+      'Joins at query time',
+      'Shared canonical facts',
+    ],
+  }}
+  right={{
+    title: 'MongoDB',
+    subtitle: 'documents + aggregates',
+    points: [
+      'Nested BSON',
+      'Embed or reference',
+      'Aggregate-shaped reads',
+      'Intentional duplication',
+    ],
+  }}
+  centerLabel="model"
+/>
+
+Neither mental model forces one physical design. PostgreSQL supports JSONB and
+arrays. MongoDB supports references, schema validation, and multi-document
+transactions. Those capabilities are useful escape hatches, but using an escape
+hatch for the majority of a workload can signal that the other model deserves
+evaluation.
+
+## How it works
+
+### Data models and schema
+
+In PostgreSQL, a table definition gives columns concrete types and can attach
+`NOT NULL`, `CHECK`, `UNIQUE`, primary-key, and foreign-key constraints. Schema
+migrations make structural change explicit. That ceremony creates coordination
+cost, but it also lets the database reject invalid state regardless of which
+application or script writes it.
+
+```sql
+CREATE TABLE orders (
+  id uuid PRIMARY KEY,
+  customer_id uuid NOT NULL REFERENCES customers(id),
+  total_minor integer NOT NULL CHECK (total_minor >= 0),
+  currency char(3) NOT NULL,
+  placed_at timestamptz NOT NULL
+);
+```
+
+MongoDB collections accept BSON documents whose fields can vary. Applications
+can add fields gradually and use collection-level JSON Schema validation when
+the database should enforce a minimum shape. Flexibility means old and new
+document versions can coexist; it does not remove the need to define which
+shapes the application understands.
+
+```json
+{
+  "_id": "7f84…",
+  "customerId": "c819…",
+  "shippingAddress": { "city": "Córdoba", "country": "AR" },
+  "items": [{ "sku": "FIELD-01", "quantity": 2, "priceMinor": 2400 }],
+  "currency": "ARS",
+  "placedAt": "2026-08-09T15:00:00Z"
+}
+```
+
+This order document makes a complete order cheap to retrieve. It also captures
+the product price and address as they were at purchase time—duplication that is
+often correct historical modeling. Duplicating a customer’s current risk tier
+into every order would be different: if it must always be current, updating and
+verifying all copies becomes part of the design.
+
+### Consistency and transactions
+
+PostgreSQL transactions cover any rows touched by the transaction. Its default
+`READ COMMITTED` isolation gives each statement a fresh committed snapshot;
+stronger isolation levels are available when an invariant requires them.
+Constraints participate in the same transaction, so a failed rule rolls the
+write back.
+
+MongoDB guarantees atomic writes at the single-document level, including updates
+to nested fields. It also supports transactions across documents, collections,
+databases, and shards. Multi-document transactions are valuable, but they cost
+more than a single-document write and can erase part of the simplicity gained
+from aggregate-oriented modeling when used for every request.
+
+Ask these questions before choosing:
+
+1. Which facts must change together or not at all?
+2. Can those facts truthfully live in one bounded document?
+3. Which uniqueness, reference, and range rules must hold even when several
+   writers exist?
+4. What isolation anomaly would violate a business rule, and has a test shown
+   the selected transaction pattern prevents it?
+
+### Query patterns and indexes
+
+PostgreSQL is particularly expressive when questions cross relationships: joins,
+common table expressions, window functions, aggregates, and many index types
+support transactional and analytical-style queries on the same data. The planner
+chooses an execution strategy from statistics, so production query plans still
+need observation.
+
+MongoDB’s query language and aggregation pipeline can filter, reshape, group,
+and join documents with stages such as `$match`, `$group`, and `$lookup`.
+Queries aligned with an embedded document often avoid joins entirely. Deep,
+unbounded arrays and frequent cross-collection lookups deserve scrutiny because
+they work against that advantage.
+
+For either database, an index is a workload decision, not free acceleration.
+Indexes consume storage, memory, and write work. Design them from measured query
+shapes, validate with execution plans, and remove indexes that no longer earn
+their cost.
+
+### Scaling and availability
+
+Both systems commonly begin with one primary and replicas. Read replicas can
+serve suitable read traffic and improve recovery options, but replica lag means
+not every read is automatically read-your-writes. Application behavior must
+match the chosen read preference and consistency requirement.
+
+PostgreSQL most often scales vertically first, then adds replicas, connection
+pooling, partitioning, and—when evidence demands it—an extension or external
+system for distributed operation. Native partitioning divides a table inside a
+PostgreSQL cluster; it is not the same thing as automatically distributing
+writes across independent servers.
+
+MongoDB has built-in sharding across a cluster. A shard key decides where data
+lives and strongly affects write distribution, query routing, and the ability to
+move chunks. A poor key can create a hot shard or force scatter-gather queries.
+Sharding is an operational commitment, not an early checkbox.
+
+<ComparisonDiagram
+  title="A pragmatic scaling sequence"
+  description="Both choices benefit from measuring and tuning a simple deployment before distributing data. The later mechanisms and failure modes differ."
+  left={{
+    title: 'PostgreSQL path',
+    subtitle: 'scale a relational core',
+    points: [
+      'Tune queries',
+      'Pool connections',
+      'Add read replicas',
+      'Partition or distribute',
+    ],
+  }}
+  right={{
+    title: 'MongoDB path',
+    subtitle: 'scale document access',
+    points: [
+      'Tune documents',
+      'Tune indexes',
+      'Add replica set',
+      'Shard with a proven key',
+    ],
+  }}
+  centerLabel="measure"
+/>
+
+### Operational trade-offs
+
+A database choice includes backups, restores, upgrades, observability, incident
+response, capacity planning, and the team’s ability to debug a slow query at
+03:00. Managed services reduce undifferentiated work but do not choose schema,
+indexes, connection behavior, retention, or recovery objectives for you.
+
+PostgreSQL teams need to understand vacuum behavior, transaction age,
+connections, lock contention, replication lag, and query plans. MongoDB teams
+need to understand working-set memory, document growth, replica elections,
+read/write concerns, chunk distribution, and shard-key behavior. The cheapest
+technology on a feature sheet can be the expensive one if it is unfamiliar to
+the operators responsible for it.
+
+## Use cases
+
+### PostgreSQL is often a natural starting point for
+
+- Commerce, billing, ledgers, and inventory where constraints connect multiple
+  entities and transaction boundaries are important.
+- SaaS applications with conventional CRUD plus reporting and evolving query
+  needs.
+- Systems where several consumers write to the same canonical data and database
+  enforcement provides a valuable last line of defense.
+- Products whose relationship graph is important and cannot be reduced to a
+  small number of stable aggregates.
+
+### MongoDB is often a natural starting point for
+
+- Content, catalog, profile, and configuration records with heterogeneous but
+  bounded shapes that are normally retrieved as a whole.
+- Event or device records that arrive as nested structures and are queried
+  through known indexed dimensions.
+- Products where aggregates evolve independently, gradual document-version
+  migration is a deliberate requirement, and cross-aggregate invariants are
+  limited.
+- Workloads with a demonstrated horizontal distribution need and a well-tested
+  shard key aligned with dominant queries.
+
+These are prompts, not rules. A commerce system can store a flexible catalog in
+MongoDB; a content platform can use PostgreSQL JSONB. The system’s hardest
+invariants and most valuable queries should carry more weight than its industry
+label.
+
+## Trade-offs
+
+| Concern           | PostgreSQL trade-off                                                          | MongoDB trade-off                                                                             |
+| ----------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Integrity         | Rich declarative constraints; structural changes are coordinated              | Single-document rules are direct; cross-document rules often need more application discipline |
+| Read shape        | Normalization preserves canonical facts; joins do work at read time           | Embedding can make aggregate reads direct; duplication creates update responsibilities        |
+| Evolution         | Migrations are visible and reviewable; large-table changes need care          | Shapes can coexist; every reader must tolerate and eventually retire old shapes               |
+| Transactions      | Broad, mature relational transactions are central                             | Single-document atomicity is cheap; distributed transactions exist but add cost               |
+| Distribution      | Simple single-node path is strong; write distribution needs additional design | Native sharding is integrated; shard-key mistakes are consequential                           |
+| Query flexibility | SQL excels at changing relational questions                                   | Aggregation is capable, but the best performance follows planned document access              |
+| Team fit          | Common skills and tooling; deep production tuning still matters               | Productive document model; safe denormalization and sharding require specific skill           |
+
+The central trade-off is where complexity sits. Normalization can move work into
+joins and migrations while centralizing facts and rules. Embedding can move work
+into write coordination and document evolution while making primary reads
+direct. Choose the complexity your domain actually has and your team can see.
+
+## When to choose each option
+
+Choose PostgreSQL first when you cannot yet justify another model, especially
+for a conventional application with relational data. It offers a broad query
+surface and strong integrity without requiring early distribution decisions. Use
+JSONB selectively for genuinely variable attributes, not to avoid modeling all
+important structure.
+
+Choose MongoDB when the document boundary is a real domain boundary: the nested
+data belongs together, most invariants fit inside it, and major queries follow
+it. If horizontal write scaling is a requirement, validate cardinality,
+frequency, monotonicity, and query targeting with production-like data before
+committing to a shard key.
+
+Consider using both only when independently owned workloads have independently
+justified needs. “Polyglot persistence” adds backup, monitoring, security,
+skills, deployment, and incident-response costs. It is not a substitute for
+making a decision.
+
+## Dos and don’ts
+
+### Do
+
+- Write down invariants and representative queries before designing storage.
+- Model historical facts differently from facts that must stay current.
+- Test realistic data volume, skew, indexes, transaction contention, and failure
+  behavior.
+- Put schema evolution in version control, whether it is SQL migration or a
+  document migration.
+- Practice restoring backups and measure recovery time and data-loss exposure.
+- Revisit the decision when measured constraints change.
+
+### Don’t
+
+- Choose MongoDB solely because an HTTP API sends JSON.
+- Choose PostgreSQL solely because the data looks tabular in an early mockup.
+- Treat a flexible schema as having no schema.
+- Treat multi-document transactions as permission to ignore document boundaries.
+- Introduce sharding before a single deployment is measured and tuned.
+- Duplicate a fact without naming which copy is authoritative and how divergence
+  is detected.
+
+## Common questions
+
+<details>
+  <summary>Is MongoDB eventually consistent?</summary>
+  <p>
+    No single label describes every operation. MongoDB provides configurable
+    read concern, write concern, and read preference, plus transactions. Reading
+    from a lagging secondary has different behavior from a majority-committed
+    read from the primary. State the guarantee required for each workflow and
+    configure it explicitly.
+  </p>
+</details>
+
+<details>
+  <summary>Can PostgreSQL store document data?</summary>
+  <p>
+    Yes. JSONB supports indexing and rich operators, and it is useful for
+    variable attributes or payloads that belong beside relational data. If
+    nearly every important operation manipulates large opaque JSON documents,
+    compare that design honestly with a document database instead of assuming
+    one column removes the trade-off.
+  </p>
+</details>
+
+<details>
+  <summary>Does MongoDB support joins and transactions?</summary>
+  <p>
+    Yes. The aggregation pipeline provides <code>$lookup</code>, and MongoDB
+    supports multi-document transactions. Availability is not the same as being
+    the cheapest dominant pattern. If most requests require broad lookups and
+    cross-document transactions, revisit the aggregate boundaries and compare a
+    relational design.
+  </p>
+</details>
+
+<details>
+  <summary>Which one scales better?</summary>
+  <p>
+    Neither wins without a workload. MongoDB integrates sharding as a core
+    deployment model; PostgreSQL has a strong vertical and replica-based path
+    plus several approaches to distribution. Data distribution makes some
+    queries and constraints harder in any system. Measure throughput, data size,
+    skew, latency, consistency, and operational capacity.
+  </p>
+</details>
+
+<details>
+  <summary>Which is faster?</summary>
+  <p>
+    The data model, query, index, working set, hardware, concurrency, and
+    durability settings dominate a brand-level answer. Benchmark the operations
+    that matter with representative data and include writes, tail latency,
+    maintenance, and failure recovery—not only a warm-cache point read.
+  </p>
+</details>
+
+<details>
+  <summary>Can we migrate later?</summary>
+  <p>
+    Usually, but migration cost grows with data volume, query coupling,
+    availability requirements, and semantic differences. Preserve explicit
+    domain boundaries, avoid leaking database-specific representations through
+    every layer, and plan dual reads or writes only when a measured need
+    justifies their risk.
+  </p>
+</details>
+
+## Diagrams
+
+The diagrams above use the same visual grammar throughout this collection:
+panels represent a model or operating boundary, arrows represent work or data
+movement, and the center label names the decision activity. They are SVG,
+responsive, theme-aware, and include a title, description, and text caption so
+the comparison is not available only through color or geometry.
+
+When diagramming your own design, draw the write path and the failure path—not
+only the successful read. Mark which component owns each invariant, which facts
+are copied, and where a stale read is acceptable. Those annotations expose more
+of the real database choice than product logos do.
+
+## References
+
+- [PostgreSQL documentation: Data Definition](https://www.postgresql.org/docs/current/ddl.html)
+- [PostgreSQL documentation: Transaction Isolation](https://www.postgresql.org/docs/current/transaction-iso.html)
+- [PostgreSQL documentation: JSON Types](https://www.postgresql.org/docs/current/datatype-json.html)
+- [PostgreSQL documentation: Table Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html)
+- [MongoDB documentation: Data Modeling](https://www.mongodb.com/docs/manual/data-modeling/)
+- [MongoDB documentation: Transactions](https://www.mongodb.com/docs/manual/core/transactions/)
+- [MongoDB documentation: Read Isolation, Consistency, and Recency](https://www.mongodb.com/docs/manual/core/read-isolation-consistency-recency/)
+- [MongoDB documentation: Sharding](https://www.mongodb.com/docs/manual/sharding/)
+
+## Related concepts
+
+The collection will connect this guide to entries on normalization, consistency
+models, indexing, partitioning, and database migrations as those concepts are
+published. Related links never include drafts in production.

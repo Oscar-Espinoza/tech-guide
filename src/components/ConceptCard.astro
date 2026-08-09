@@ -1,0 +1,33 @@
+---
+import { conceptHref, type Concept } from '../lib/content';
+
+const { concept } = Astro.props as { concept: Concept };
+---
+
+<article
+  class="concept-card"
+  data-category={concept.data.category}
+  data-difficulty={concept.data.difficulty}
+  data-status={concept.data.status}
+  data-tags={concept.data.tags.join(',')}
+>
+  <div class="eyebrow">
+    <span>{concept.data.category}</span><span>{concept.data.difficulty}</span>
+  </div>
+  <h2><a href={conceptHref(concept)}>{concept.data.title}</a></h2>
+  <p>{concept.data.description}</p>
+  <div class="card-footer">
+    <span class:list={['status', `status-${concept.data.status}`]}
+      >{concept.data.status}</span
+    >
+    <time datetime={concept.data.updatedAt.toISOString()}
+      >Updated {
+        concept.data.updatedAt.toLocaleDateString('en', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      }</time
+    >
+  </div>
+</article>

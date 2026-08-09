@@ -1,0 +1,15 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Page not found"
+  description="The requested Systems Field Guide page could not be found."
+  noindex
+>
+  <section class="not-found">
+    <strong aria-hidden="true">404</strong><h1>That path ends here.</h1><p>
+      The page may have moved, or the concept may still be in the notebook.
+    </p><p><a class="button" href="/concepts/">Browse concepts</a></p>
+  </section>
+</BaseLayout>

@@ -1,0 +1,155 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { visibleConcepts } from '../../lib/content';
+import { categories } from '../../lib/content-schema';
+
+const concepts = visibleConcepts(await getCollection('concepts')).filter(
+  (concept) => concept.data.locale === 'en',
+);
+const tags = [
+  ...new Set(concepts.flatMap((concept) => concept.data.tags)),
+].sort();
+---
+
+<BaseLayout
+  title="Search"
+  description="Search the Systems Field Guide by topic, category, and tag."
+>
+  <header class="page-header">
+    <div class="page-shell">
+      <p class="hero-kicker">Full-text index</p><h1>Search the guide</h1><p>
+        Search concepts, trade-offs, questions, and references. Press <kbd
+          >/</kbd
+        > anywhere to focus the search field.
+      </p>
+    </div>
+  </header>
+  <section class="section">
+    <div class="section-inner">
+      <form class="filters" data-search-form>
+        <div class="field search-box" style="grid-column: span 2">
+          <label for="query">Search</label><input
+            id="query"
+            name="q"
+            type="search"
+            autocomplete="off"
+            placeholder="Try “transactions” or “document model”"
+          /><span class="shortcut" aria-hidden="true">/</span>
+        </div>
+        <div class="field">
+          <label for="search-category">Category</label><select
+            id="search-category"
+            name="category"
+            ><option value="">All categories</option>{
+              categories.map((category) => (
+                <option value={category}>{category}</option>
+              ))
+            }</select
+          >
+        </div>
+        <div class="field">
+          <label for="search-tag">Tag</label><select id="search-tag" name="tag"
+            ><option value="">All tags</option>{
+              tags.map((tag) => <option value={tag}>{tag}</option>)
+            }</select
+          >
+        </div>
+      </form>
+      <p class="results-count" role="status" data-search-status>
+        Enter a term to search the English collection.
+      </p>
+      <div data-search-results></div>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-search-form]');
+  const input = document.querySelector<HTMLInputElement>('#query');
+  const status = document.querySelector<HTMLElement>('[data-search-status]');
+  const output = document.querySelector<HTMLElement>('[data-search-results]');
+  const params = new URLSearchParams(location.search);
+  let timer: ReturnType<typeof setTimeout>;
+
+  for (const control of form?.elements ?? []) {
+    if (
+      control instanceof HTMLInputElement ||
+      control instanceof HTMLSelectElement
+    )
+      control.value = params.get(control.name) ?? '';
+  }
+
+  const search = async () => {
+    const data = new FormData(form ?? undefined);
+    const query = String(data.get('q') ?? '').trim();
+    const next = new URLSearchParams();
+    for (const [key, value] of data.entries())
+      if (value) next.set(key, String(value));
+    history.replaceState({}, '', next.size ? `?${next}` : location.pathname);
+    if (!query) {
+      if (status)
+        status.textContent = 'Enter a term to search the English collection.';
+      if (output) output.innerHTML = '';
+      return;
+    }
+    if (status) status.textContent = 'Searching…';
+    try {
+      // @ts-expect-error Pagefind is generated after Astro builds.
+      const pagefind = await import(/* @vite-ignore */ '/pagefind/pagefind.js');
+      await pagefind.init();
+      const filters: Record<string, string> = {};
+      if (data.get('category')) filters.category = String(data.get('category'));
+      if (data.get('tag')) filters.tag = String(data.get('tag'));
+      const response = await pagefind.search(query, { filters });
+      const results = await Promise.all(
+        response.results.map(
+          (result: {
+            data: () => Promise<{
+              url: string;
+              meta: Record<string, string>;
+              excerpt: string;
+            }>;
+          }) => result.data(),
+        ),
+      );
+      if (status)
+        status.textContent = `${results.length} ${results.length === 1 ? 'result' : 'results'} for “${query}”`;
+      if (output) {
+        output.replaceChildren(
+          ...results.map((result) => {
+            const article = document.createElement('article');
+            article.className = 'search-result';
+            const heading = document.createElement('h2');
+            const link = document.createElement('a');
+            link.href = result.url;
+            link.textContent = result.meta.title ?? result.url;
+            heading.append(link);
+            const excerpt = document.createElement('p');
+            excerpt.innerHTML = result.excerpt;
+            article.append(heading, excerpt);
+            return article;
+          }),
+        );
+        if (!results.length)
+          output.innerHTML =
+            '<div class="empty-state"><h2>No results</h2><p>Try a broader term or clear a filter.</p></div>';
+      }
+    } catch {
+      if (status)
+        status.textContent =
+          'Search becomes available after the production index is built.';
+    }
+  };
+  form?.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(search, 180);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === '/' && document.activeElement !== input) {
+      event.preventDefault();
+      input?.focus();
+    }
+  });
+  if (params.get('q')) search();
+</script>

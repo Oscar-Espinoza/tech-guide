@@ -1,0 +1,52 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="About"
+  description="Why Systems Field Guide explains engineering choices through constraints and trade-offs."
+>
+  <header class="page-header">
+    <div class="page-shell">
+      <p class="hero-kicker">About</p><h1>
+        A guide for making contextual choices.
+      </h1><p>
+        Systems Field Guide is a growing collection of practical explanations
+        for developers learning how architecture decisions behave outside a
+        feature checklist.
+      </p>
+    </div>
+  </header>
+  <section class="section">
+    <div class="section-inner article-content">
+      <h2>What this collection values</h2>
+      <p>
+        Technology choices are rarely contests with a permanent winner. Workload
+        shape, consistency requirements, team experience, operational capacity,
+        time horizon, and failure tolerance all change the answer. Each concept
+        therefore starts with a mental model and makes its constraints visible.
+      </p>
+      <p>
+        The diagrams and comparisons aim to be useful at a whiteboard, during
+        design review, or while learning an unfamiliar part of the stack.
+        Official documentation remains the source for detailed product behavior;
+        this guide focuses on the reasoning that connects behavior to choices.
+      </p>
+      <h2>Who makes it</h2>
+      <p>
+        The guide is written and maintained by <a
+          href="https://github.com/Oscar-Espinoza"
+          rel="me">Oscar Espinoza</a
+        >. It is intentionally quiet about authorship on the homepage so the
+        material, not a résumé, stays central.
+      </p>
+      <h2>Publishing approach</h2>
+      <p>
+        Entries may be marked <em>evolving</em> when the core explanation is useful
+        but the guide is still expanding. Dates and official references make review
+        easier. Drafts are never included in production routes, search, sitemaps,
+        or related links.
+      </p>
+    </div>
+  </section>
+</BaseLayout>

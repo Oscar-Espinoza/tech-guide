@@ -1,0 +1,143 @@
+---
+import { getCollection } from 'astro:content';
+import ConceptCard from '../components/ConceptCard.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { visibleConcepts } from '../lib/content';
+
+const concepts = visibleConcepts(await getCollection('concepts')).filter(
+  (concept) => concept.data.locale === 'en',
+);
+const featured =
+  concepts.find((concept) => concept.data.featured) ?? concepts[0];
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Systems Field Guide',
+  description: 'Systems, explained through their trade-offs.',
+  url: new URL('/', Astro.site).href,
+  author: {
+    '@type': 'Person',
+    name: 'Oscar Espinoza',
+    url: 'https://github.com/Oscar-Espinoza',
+  },
+};
+---
+
+<BaseLayout structuredData={structuredData}>
+  <section class="hero">
+    <div class="hero-inner">
+      <p class="hero-kicker">Architectures · Databases · Workflows</p>
+      <h1>Systems, explained through their trade-offs.</h1>
+      <p class="hero-lede">
+        Explore architectures, databases, and engineering workflows through
+        diagrams, practical use cases, common questions, and the constraints
+        behind real choices.
+      </p>
+      <div class="hero-actions">
+        <a class="button" href="/concepts/">Explore the collection</a>
+        <a
+          class="button button-secondary"
+          href="/concepts/postgresql-vs-mongodb/"
+          >Start with PostgreSQL vs MongoDB</a
+        >
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="browse-heading">
+    <div class="section-inner">
+      <div class="section-heading">
+        <h2 id="browse-heading">Browse by problem space</h2>
+        <p>
+          Start with the area you are deciding about. Each guide emphasizes
+          constraints and decision signals—not universal rankings.
+        </p>
+      </div>
+      <div class="category-grid">
+        <a class="category-card" href="/concepts/?category=architectures"
+          ><span>01</span><div>
+            <h3>Architectures</h3><p>
+              Boundaries, communication patterns, and the costs of distributing
+              a system.
+            </p>
+          </div></a
+        >
+        <a class="category-card" href="/concepts/?category=databases"
+          ><span>02</span><div>
+            <h3>Databases</h3><p>
+              Data models, consistency, access patterns, and operational
+              realities.
+            </p>
+          </div></a
+        >
+        <a class="category-card" href="/concepts/?category=workflows"
+          ><span>03</span><div>
+            <h3>Workflows</h3><p>
+              Engineering practices that shape feedback loops and safe delivery.
+            </p>
+          </div></a
+        >
+      </div>
+    </div>
+  </section>
+
+  {
+    featured && (
+      <section class="section" aria-labelledby="featured-heading">
+        <div class="section-inner">
+          <>
+            <div class="section-heading">
+              <>
+                <h2 id="featured-heading">Featured concept</h2>
+                <p>
+                  A complete field guide: mental models, operational
+                  constraints, diagrams, anti-patterns, and questions teams
+                  actually ask.
+                </p>
+              </>
+            </div>
+            <div class="concept-grid">
+              <ConceptCard concept={featured} />
+            </div>
+          </>
+        </div>
+      </section>
+    )
+  }
+
+  <section class="section" aria-labelledby="method-heading">
+    <div class="section-inner">
+      <div class="section-heading">
+        <h2 id="method-heading">How to use the guide</h2><p>
+          Read linearly for a foundation, or jump directly to trade-offs, use
+          cases, and common questions when you are evaluating a real decision.
+        </p>
+      </div>
+      <div class="category-grid">
+        <div class="category-card">
+          <span>Orient</span><div>
+            <h3>Build a mental model</h3><p>
+              Understand the shape of each option before comparing features.
+            </p>
+          </div>
+        </div>
+        <div class="category-card">
+          <span>Constrain</span><div>
+            <h3>Name what matters</h3><p>
+              Make workload, consistency, team, and operational constraints
+              explicit.
+            </p>
+          </div>
+        </div>
+        <div class="category-card">
+          <span>Decide</span><div>
+            <h3>Choose for now</h3><p>
+              Prefer the simplest choice that meets today’s evidence and
+              preserves a credible path forward.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

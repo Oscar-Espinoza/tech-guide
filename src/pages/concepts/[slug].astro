@@ -1,0 +1,149 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {
+  conceptHref,
+  conceptSlug,
+  resolveRelated,
+  translationHref,
+  visibleConcepts,
+} from '../../lib/content';
+
+export async function getStaticPaths() {
+  const concepts = visibleConcepts(await getCollection('concepts'));
+  return concepts
+    .filter((concept) => concept.data.locale === 'en')
+    .map((concept) => ({
+      params: { slug: conceptSlug(concept) },
+      props: { concept, concepts },
+    }));
+}
+
+const { concept, concepts } = Astro.props as {
+  concept: CollectionEntry<'concepts'>;
+  concepts: CollectionEntry<'concepts'>[];
+};
+const { Content, headings } = await render(concept);
+const related = resolveRelated(concepts, concept);
+const spanishHref = translationHref(concepts, concept, 'es');
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: concept.data.title,
+  description: concept.data.description,
+  datePublished: concept.data.publishedAt.toISOString(),
+  dateModified: concept.data.updatedAt.toISOString(),
+  inLanguage: concept.data.locale,
+  author: {
+    '@type': 'Person',
+    name: 'Oscar Espinoza',
+    url: 'https://github.com/Oscar-Espinoza',
+  },
+  mainEntityOfPage: new URL(conceptHref(concept), Astro.site).href,
+};
+const topHeadings = headings.filter(
+  (heading) => heading.depth === 2 || heading.depth === 3,
+);
+---
+
+<BaseLayout
+  title={concept.data.title}
+  description={concept.data.description}
+  type="article"
+  structuredData={structuredData}
+>
+  <div class="concept-layout">
+    <aside class="concept-sidebar" aria-label="Concept navigation">
+      <h2>In the collection</h2><ul>
+        <li><a href="/concepts/">All concepts</a></li><li>
+          <a href={`/concepts/?category=${concept.data.category}`}
+            >{concept.data.category}</a
+          >
+        </li><li>
+          <a href={spanishHref} lang="es" hreflang="es">Leer en español</a>
+        </li>
+      </ul>
+    </aside>
+    <article data-pagefind-body>
+      <header class="article-header">
+        <p class="hero-kicker">
+          {concept.data.category} · {concept.data.difficulty}
+        </p>
+        <h1 data-pagefind-meta="title">{concept.data.title}</h1>
+        <p class="lede" data-pagefind-meta="description">
+          {concept.data.description}
+        </p>
+        <div class="article-meta">
+          <span class:list={['status', `status-${concept.data.status}`]}
+            >{concept.data.status}</span
+          ><time datetime={concept.data.updatedAt.toISOString()}
+            >Updated {
+              concept.data.updatedAt.toLocaleDateString('en', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            }</time
+          ><span>{concept.data.tags.join(' · ')}</span><a
+            href={spanishHref}
+            lang="es"
+            hreflang="es">Español</a
+          >
+        </div>
+        <span class="sr-only" data-pagefind-filter="category"
+          >{concept.data.category}</span
+        >
+        {
+          concept.data.tags.map((tag) => (
+            <span class="sr-only" data-pagefind-filter="tag">
+              {tag}
+            </span>
+          ))
+        }
+      </header>
+      <details class="mobile-toc">
+        <summary>On this page</summary><nav aria-label="Table of contents">
+          <ul>
+            {
+              topHeadings.map((heading) => (
+                <li>
+                  <a href={`#${heading.slug}`}>{heading.text}</a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+      </details>
+      <div class="article-content"><Content /></div>
+      {
+        related.length > 0 && (
+          <section class="related">
+            <>
+              <h2>Related concepts</h2>
+              <ul>
+                {related.map((item) => (
+                  <li>
+                    <a href={conceptHref(item)}>{item.data.title}</a>
+                  </li>
+                ))}
+              </ul>
+            </>
+          </section>
+        )
+      }
+    </article>
+    <aside class="toc">
+      <nav aria-label="Table of contents">
+        <h2>On this page</h2><ul>
+          {
+            topHeadings.map((heading) => (
+              <li data-depth={heading.depth}>
+                <a href={`#${heading.slug}`}>{heading.text}</a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </aside>
+  </div>
+</BaseLayout>

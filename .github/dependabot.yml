@@ -1,0 +1,50 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/Argentina/Buenos_Aires
+    versioning-strategy: increase
+    groups:
+      astro-integrations:
+        patterns:
+          - astro
+          - '@astrojs/*'
+        update-types:
+          - minor
+          - patch
+      quality-and-testing:
+        patterns:
+          - '@playwright/*'
+          - '@types/*'
+          - '@typescript-eslint/*'
+          - eslint
+          - 'eslint-*'
+          - globals
+          - pagefind
+          - prettier
+          - 'prettier-*'
+          - typescript
+          - 'typescript-*'
+          - vitest
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/Argentina/Buenos_Aires
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
